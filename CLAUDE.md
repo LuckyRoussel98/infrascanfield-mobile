@@ -6,7 +6,7 @@ Application mobile React Native (Android prioritaire, iOS Phase 3) qui se connec
 
 ## Informations app
 
-- Éditeur : InfraS - Sylvain Legrand
+- Éditeur : InfraS - Lucky Rousse
 - Licence : GPL v3+
 - Plateformes : Android (priorité Phase 1), iOS (Phase 3)
 - Compatibilité : Android 8.0+ (API 26+), iOS 14+

@@ -10,7 +10,7 @@ Application mobile React Native (Android prioritaire, iOS Phase 3) qui se connec
 | Plateformes | Android (priorité Phase 1), iOS (Phase 3) |
 | Framework | React Native + Expo (EAS Build) |
 | Langage | TypeScript strict |
-| Éditeur | InfraS - Sylvain Legrand |
+| Éditeur | InfraS - Lucky Rousse |
 | Licence | GPL v3+ |
 
 ## Stack technique
