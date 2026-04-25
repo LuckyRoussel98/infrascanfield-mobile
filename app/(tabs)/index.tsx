@@ -1,42 +1,173 @@
+import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '@/components/Button';
+import { getDashboard } from '@/api/endpoints/dashboard';
+import { ObjectCard } from '@/components/ObjectCard';
 import { useAuthStore } from '@/stores/authStore';
+import type { InterventionRow, InvoiceRow, ProposalRow } from '@/types/api';
+import { formatCurrency, formatDate, formatDuration, formatRelativeDateTime } from '@/utils/format';
 
-/**
- * Dashboard placeholder — wired in Step 8.
- * For now we render the logged-in user info and a logout button so we can validate
- * the full onboarding -> auth -> protected route chain end-to-end.
- */
+const INTERVENTION_STATUS_VARIANTS: Record<number, 'neutral' | 'warning' | 'info' | 'success'> = {
+  0: 'neutral',
+  1: 'info',
+  2: 'success',
+  3: 'success',
+};
+const INVOICE_STATUS_VARIANTS: Record<number, 'neutral' | 'info' | 'success' | 'danger'> = {
+  0: 'neutral',
+  1: 'info',
+  2: 'success',
+  3: 'danger',
+};
+
 export default function DashboardScreen() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
 
-  const onLogout = async () => {
-    await logout();
-    router.replace('/(auth)/login');
+  const query = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: getDashboard,
+  });
+
+  const goToObject = (modulepart: string, id: number) => {
+    router.push(`/object/${modulepart}/${id}` as never);
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark" edges={['top', 'bottom']}>
-      <View className="flex-1 items-center justify-center p-6">
-        <Text className="mb-2 text-2xl font-semibold text-text dark:text-text-dark">
-          {t('tabs.dashboard')}
-        </Text>
-        <Text className="mb-6 text-base text-text-muted dark:text-text-muted-dark">
-          Hello {user?.firstname || user?.login || ''} - real dashboard wired in Step 8.
-        </Text>
-        <Button
-          label={t('settings.logout')}
-          variant="secondary"
-          onPress={onLogout}
-          fullWidth={false}
-        />
-      </View>
+    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark" edges={['top']}>
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} />}
+      >
+        <View className="mb-6">
+          <Text className="text-2xl font-bold text-text dark:text-text-dark">
+            {t('tabs.dashboard')}
+          </Text>
+          <Text className="mt-1 text-sm text-text-muted dark:text-text-muted-dark">
+            {user?.firstname || user?.lastname
+              ? `${user?.firstname ?? ''} ${user?.lastname ?? ''}`.trim()
+              : (user?.login ?? '')}
+          </Text>
+        </View>
+
+        {query.isLoading ? (
+          <View className="items-center py-12">
+            <ActivityIndicator />
+          </View>
+        ) : query.isError ? (
+          <View className="rounded-2xl border border-danger/30 bg-danger/10 p-4">
+            <Text className="text-sm text-danger">{t('common.error')}</Text>
+            <Pressable onPress={() => query.refetch()} className="mt-2 self-start">
+              <Text className="text-sm font-semibold text-danger">{t('common.retry')}</Text>
+            </Pressable>
+          </View>
+        ) : query.data ? (
+          <View>
+            <Section
+              title={t('dashboard.interventions_today')}
+              extra={
+                query.data.interventions_pending_count > 0
+                  ? t('dashboard.interventions_pending', { count: query.data.interventions_pending_count })
+                  : undefined
+              }
+            >
+              {query.data.interventions_today.length === 0 ? (
+                <Text className="text-sm text-text-muted dark:text-text-muted-dark">
+                  {t('dashboard.empty_today')}
+                </Text>
+              ) : (
+                query.data.interventions_today.map((row: InterventionRow) => (
+                  <ObjectCard
+                    key={row.id}
+                    ref={row.ref}
+                    title={row.soc_name}
+                    subtitle={row.description || formatRelativeDateTime(row.date_valid ?? row.date_creation)}
+                    rightLabel={row.duration > 0 ? formatDuration(row.duration) : undefined}
+                    statusLabel={t(`interventions.status_${row.status}` as never, { defaultValue: '' })}
+                    statusVariant={INTERVENTION_STATUS_VARIANTS[row.status] ?? 'neutral'}
+                    onPress={() => goToObject('ficheinter', row.id)}
+                  />
+                ))
+              )}
+            </Section>
+
+            <Section title={t('dashboard.invoices_recent')}>
+              {query.data.invoices_recent.length === 0 ? (
+                <Text className="text-sm text-text-muted dark:text-text-muted-dark">
+                  {t('invoices.empty')}
+                </Text>
+              ) : (
+                query.data.invoices_recent.map((row: InvoiceRow) => (
+                  <ObjectCard
+                    key={row.id}
+                    ref={row.ref}
+                    title={row.soc_name}
+                    subtitle={formatDate(row.date)}
+                    rightLabel={formatCurrency(row.total_ttc)}
+                    statusLabel={
+                      row.paid === 1
+                        ? t('invoices.paid')
+                        : t(`invoices.status_${row.status}` as never, { defaultValue: '' })
+                    }
+                    statusVariant={
+                      row.paid === 1 ? 'success' : (INVOICE_STATUS_VARIANTS[row.status] ?? 'neutral')
+                    }
+                    onPress={() => goToObject('facture', row.id)}
+                  />
+                ))
+              )}
+            </Section>
+
+            <Section title={t('dashboard.proposals_to_sign')}>
+              {query.data.proposals_to_sign.length === 0 ? (
+                <Text className="text-sm text-text-muted dark:text-text-muted-dark">
+                  {t('invoices.empty')}
+                </Text>
+              ) : (
+                query.data.proposals_to_sign.map((row: ProposalRow) => (
+                  <ObjectCard
+                    key={row.id}
+                    ref={row.ref}
+                    title={row.soc_name}
+                    subtitle={`${formatDate(row.date)}${row.date_end ? ` → ${formatDate(row.date_end)}` : ''}`}
+                    rightLabel={formatCurrency(row.total_ttc)}
+                    onPress={() => goToObject('propal', row.id)}
+                  />
+                ))
+              )}
+            </Section>
+
+            <Text className="mt-2 text-xs text-text-muted dark:text-text-muted-dark">
+              {t('dashboard.recent_scans', { count: query.data.scan_recent_count })}
+            </Text>
+          </View>
+        ) : null}
+      </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function Section({
+  title,
+  extra,
+  children,
+}: {
+  title: string;
+  extra?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View className="mb-6">
+      <View className="mb-2 flex-row items-center justify-between">
+        <Text className="text-base font-semibold text-text dark:text-text-dark">{title}</Text>
+        {extra ? (
+          <Text className="text-xs text-text-muted dark:text-text-muted-dark">{extra}</Text>
+        ) : null}
+      </View>
+      {children}
+    </View>
   );
 }
