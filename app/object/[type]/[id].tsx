@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Camera, FileText, Image as ImageIcon, RefreshCcw } from 'lucide-react-native';
+import { Camera, FileText, Image as ImageIcon, MapPin, RefreshCcw } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -46,6 +46,7 @@ const STATUS_VARIANTS: Record<number, 'neutral' | 'warning' | 'info' | 'success'
 };
 
 const BILLING_TYPES: ModulePart[] = ['facture', 'propal', 'contrat'];
+const FIELD_PHOTO_TYPES: ModulePart[] = ['ficheinter', 'projet'];
 
 type TabKey = 'details' | 'documents' | 'lines';
 
@@ -65,10 +66,19 @@ export default function ObjectDetailScreen() {
   });
 
   const hasLines = BILLING_TYPES.includes(modulepart);
+  const supportsFieldPhoto = FIELD_PHOTO_TYPES.includes(modulepart);
   const [activeTab, setActiveTab] = useState<TabKey>('details');
 
   const onScan = () => {
-    router.push(`/scanner/capture?modulepart=${type}&object_id=${id}` as never);
+    router.push(
+      `/scanner/capture?modulepart=${type}&object_id=${id}&scan_type=document` as never,
+    );
+  };
+
+  const onCaptureFieldPhoto = () => {
+    router.push(
+      `/scanner/capture?modulepart=${type}&object_id=${id}&scan_type=equipment_photo` as never,
+    );
   };
 
   if (!isAllowed) {
@@ -138,6 +148,14 @@ export default function ObjectDetailScreen() {
         </ScrollView>
       ) : null}
 
+      {supportsFieldPhoto ? (
+        <Pressable
+          onPress={onCaptureFieldPhoto}
+          className="absolute bottom-24 right-6 h-12 w-12 items-center justify-center rounded-full border border-border bg-surface shadow-md active:opacity-80 dark:border-border-dark dark:bg-surface-dark"
+        >
+          <MapPin size={20} color={scheme === 'dark' ? '#fafafa' : '#0a0a0a'} />
+        </Pressable>
+      ) : null}
       <Pressable
         onPress={onScan}
         className="absolute bottom-6 right-6 h-16 w-16 items-center justify-center rounded-full bg-text shadow-lg active:opacity-80 dark:bg-text-dark"
@@ -229,9 +247,29 @@ function DetailsTab({ data, t }: { data: ObjectDetailResponse; t: TFn }) {
             </Text>
           </View>
         ) : (
-          data.scan_logs.map((log) => <ScanLogRow key={log.rowid} log={log} />)
+          data.scan_logs
+            .filter((log) => log.scan_type !== 'equipment_photo')
+            .map((log) => <ScanLogRow key={log.rowid} log={log} />)
         )}
       </Section>
+
+      {FIELD_PHOTO_TYPES.includes(data.type) ? (
+        <Section title={t('equipment.tab_equipment')}>
+          {(() => {
+            const photos = data.scan_logs.filter((log) => log.scan_type === 'equipment_photo');
+            if (photos.length === 0) {
+              return (
+                <View className="rounded-2xl border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark">
+                  <Text className="text-sm text-text-muted dark:text-text-muted-dark">
+                    {t('equipment.empty')}
+                  </Text>
+                </View>
+              );
+            }
+            return photos.map((log) => <EquipmentPhotoRow key={log.rowid} log={log} />);
+          })()}
+        </Section>
+      ) : null}
     </View>
   );
 }
@@ -396,6 +434,31 @@ function ScanLogRow({ log }: { log: ObjectScanLog }) {
       <Text className="mt-0.5 text-xs text-text-muted dark:text-text-muted-dark">
         {formatBytes(log.filesize)} • {log.uploaded_at}
       </Text>
+    </View>
+  );
+}
+
+function EquipmentPhotoRow({ log }: { log: ObjectScanLog }) {
+  const hasGeo = log.geo_lat !== null && log.geo_lng !== null;
+  return (
+    <View className="mb-2 flex-row items-start rounded-2xl border border-border bg-surface p-3 dark:border-border-dark dark:bg-surface-dark">
+      <View className="mr-3 h-10 w-10 items-center justify-center rounded-xl bg-background dark:bg-background-dark">
+        <MapPin size={18} color="#6b7280" />
+      </View>
+      <View className="flex-1">
+        <Text numberOfLines={1} className="text-sm font-medium text-text dark:text-text-dark">
+          {log.filename}
+        </Text>
+        <Text className="mt-0.5 text-xs text-text-muted dark:text-text-muted-dark">
+          {formatBytes(log.filesize)} • {log.scanned_at ?? log.uploaded_at}
+        </Text>
+        {hasGeo ? (
+          <Text className="mt-1 text-xs text-text-muted dark:text-text-muted-dark">
+            {(log.geo_lat as number).toFixed(5)}, {(log.geo_lng as number).toFixed(5)}
+            {log.geo_accuracy ? ` (±${Math.round(log.geo_accuracy)} m)` : ''}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }

@@ -73,6 +73,17 @@
     "paid": "Payée",
     "unpaid": "Non payée"
   },
+  "equipment": {
+    "title": "Photo équipement",
+    "capture": "Photographier",
+    "instruction": "Cadrez l'équipement et capturez une photo géolocalisée.",
+    "geo_idle": "Localisation non démarrée",
+    "geo_fetching": "Récupération de la position…",
+    "geo_denied": "Accès à la localisation refusé — la photo sera envoyée sans coordonnées.",
+    "geo_unavailable": "Position indisponible — la photo sera envoyée sans coordonnées.",
+    "tab_equipment": "Photos terrain",
+    "empty": "Aucune photo équipement"
+  },
   "detail": {
     "tab_details": "Détails",
     "tab_documents": "Documents",

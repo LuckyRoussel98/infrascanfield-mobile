@@ -1,7 +1,8 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { MapPin } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -20,8 +21,9 @@ import { Button } from '@/components/Button';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TextField } from '@/components/TextField';
 import { toast } from '@/stores/toastStore';
-import type { ModulePart } from '@/types/api';
+import type { Geolocation, ModulePart, ScanType } from '@/types/api';
 import { generateUuid } from '@/utils/format';
+import { getCurrentPosition } from '@/utils/geolocation';
 import { logger } from '@/utils/logger';
 
 const MODULEPART_LABEL: Record<ModulePart, string> = {
@@ -32,24 +34,58 @@ const MODULEPART_LABEL: Record<ModulePart, string> = {
   contrat: 'Contrat',
 };
 
-function defaultFilename(modulepart: string, objectId: string) {
+function defaultFilename(modulepart: string, objectId: string, scanType: ScanType) {
   const today = new Date();
   const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  return `scan_${modulepart}_${objectId}_${ymd}.jpg`;
+  const prefix = scanType === 'equipment_photo' ? 'photo_eq' : 'scan';
+  return `${prefix}_${modulepart}_${objectId}_${ymd}.jpg`;
 }
 
 export default function ScannerValidateScreen() {
-  const { uri, modulepart, object_id } = useLocalSearchParams<{
+  const { uri, modulepart, object_id, scan_type } = useLocalSearchParams<{
     uri?: string;
     modulepart?: string;
     object_id?: string;
+    scan_type?: string;
   }>();
   const { t } = useTranslation();
 
-  const [filename, setFilename] = useState(defaultFilename(modulepart ?? 'scan', object_id ?? '0'));
+  const scanType: ScanType = scan_type === 'equipment_photo' ? 'equipment_photo' : 'document';
+  const isEquipmentPhoto = scanType === 'equipment_photo';
+
+  const [filename, setFilename] = useState(
+    defaultFilename(modulepart ?? 'scan', object_id ?? '0', scanType),
+  );
   const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [done, setDone] = useState<{ scan_log_id: number; idempotent: boolean } | null>(null);
+  const [geo, setGeo] = useState<Geolocation | null>(null);
+  const [geoStatus, setGeoStatus] = useState<'idle' | 'fetching' | 'ok' | 'denied' | 'unavailable'>(
+    'idle',
+  );
+
+  // For equipment photos, kick off a one-shot geolocation fetch on mount.
+  // Failure is non-blocking — the user can still send the photo without geo.
+  useEffect(() => {
+    if (!isEquipmentPhoto) return;
+    let cancelled = false;
+    setGeoStatus('fetching');
+    (async () => {
+      const res = await getCurrentPosition();
+      if (cancelled) return;
+      if (res.ok) {
+        setGeo(res.coords);
+        setGeoStatus('ok');
+      } else if (res.reason === 'permission_denied') {
+        setGeoStatus('denied');
+      } else {
+        setGeoStatus('unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEquipmentPhoto]);
 
   if (!uri || !modulepart || !object_id) {
     return (
@@ -81,15 +117,22 @@ export default function ScannerValidateScreen() {
       const res = await uploadDocument({
         modulepart: modulepart as ModulePart,
         object_id: Number(object_id),
-        filename: filename || defaultFilename(modulepart, object_id),
+        filename: filename || defaultFilename(modulepart, object_id, scanType),
         filedata: base64,
-        scan_type: 'document',
+        scan_type: scanType,
+        geolocation: geo,
         scanned_at: new Date().toISOString(),
         idempotency_key,
       });
 
       setDone({ scan_log_id: res.scan_log_id, idempotent: res.idempotent });
-      toast.success(res.idempotent ? 'Déjà envoyé (dédup)' : 'Document envoyé ✓');
+      toast.success(
+        res.idempotent
+          ? 'Déjà envoyé (dédup)'
+          : isEquipmentPhoto
+            ? 'Photo équipement envoyée ✓'
+            : 'Document envoyé ✓',
+      );
     } catch (e) {
       const apiErr = e as Partial<ApiError>;
       logger.warn('upload failed', apiErr);
@@ -113,11 +156,11 @@ export default function ScannerValidateScreen() {
   if (done) {
     return (
       <SafeAreaView className="flex-1 bg-background dark:bg-background-dark" edges={['top', 'bottom']}>
-        <ScreenHeader title={t('scanner.validate_title')} />
+        <ScreenHeader title={isEquipmentPhoto ? t('equipment.title') : t('scanner.validate_title')} />
         <View className="flex-1 items-center justify-center px-6">
           <Text className="mb-2 text-2xl font-bold text-success">✓</Text>
           <Text className="mb-1 text-base font-semibold text-text dark:text-text-dark">
-            Document envoyé
+            {isEquipmentPhoto ? 'Photo envoyée' : 'Document envoyé'}
           </Text>
           <Text className="mb-6 text-sm text-text-muted dark:text-text-muted-dark">
             scan_log_id : {done.scan_log_id}
@@ -130,10 +173,12 @@ export default function ScannerValidateScreen() {
           />
           <View className="h-3" />
           <Button
-            label="Scanner autre"
+            label={isEquipmentPhoto ? 'Photographier autre' : 'Scanner autre'}
             variant="secondary"
             onPress={() =>
-              router.replace(`/scanner/capture?modulepart=${modulepart}&object_id=${object_id}` as never)
+              router.replace(
+                `/scanner/capture?modulepart=${modulepart}&object_id=${object_id}&scan_type=${scanType}` as never,
+              )
             }
           />
         </View>
@@ -144,7 +189,7 @@ export default function ScannerValidateScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark" edges={['top', 'bottom']}>
       <ScreenHeader
-        title={t('scanner.validate_title')}
+        title={isEquipmentPhoto ? t('equipment.title') : t('scanner.validate_title')}
         subtitle={`${MODULEPART_LABEL[modulepart as ModulePart] ?? modulepart} #${object_id}`}
         onBack={() => router.back()}
       />
@@ -156,6 +201,8 @@ export default function ScannerValidateScreen() {
           <View className="mb-5 overflow-hidden rounded-2xl border border-border dark:border-border-dark">
             <Image source={{ uri }} style={{ width: '100%', height: 280 }} resizeMode="contain" />
           </View>
+
+          {isEquipmentPhoto ? <GeoBadge status={geoStatus} geo={geo} t={t} /> : null}
 
           <TextField
             label={t('scanner.filename_label')}
@@ -188,5 +235,46 @@ export default function ScannerValidateScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function GeoBadge({
+  status,
+  geo,
+  t,
+}: {
+  status: 'idle' | 'fetching' | 'ok' | 'denied' | 'unavailable';
+  geo: Geolocation | null;
+  t: (k: string) => string;
+}) {
+  let body: string;
+  let tone: 'muted' | 'success' | 'warning';
+  if (status === 'fetching') {
+    body = t('equipment.geo_fetching');
+    tone = 'muted';
+  } else if (status === 'ok' && geo) {
+    body = `${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)} (±${Math.round(geo.accuracy)} m)`;
+    tone = 'success';
+  } else if (status === 'denied') {
+    body = t('equipment.geo_denied');
+    tone = 'warning';
+  } else if (status === 'unavailable') {
+    body = t('equipment.geo_unavailable');
+    tone = 'warning';
+  } else {
+    body = t('equipment.geo_idle');
+    tone = 'muted';
+  }
+  const toneClass =
+    tone === 'success'
+      ? 'text-success'
+      : tone === 'warning'
+        ? 'text-warning'
+        : 'text-text-muted dark:text-text-muted-dark';
+  return (
+    <View className="mb-4 flex-row items-center gap-2 rounded-2xl border border-border bg-surface px-3 py-2 dark:border-border-dark dark:bg-surface-dark">
+      <MapPin size={16} color="#6b7280" />
+      <Text className={`flex-1 text-xs ${toneClass}`}>{body}</Text>
+    </View>
   );
 }

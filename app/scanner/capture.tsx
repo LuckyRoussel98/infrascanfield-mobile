@@ -21,13 +21,16 @@ import { logger } from '@/utils/logger';
  * the review screen.
  */
 export default function ScannerCaptureScreen() {
-  const { modulepart, object_id } = useLocalSearchParams<{
+  const { modulepart, object_id, scan_type } = useLocalSearchParams<{
     modulepart?: string;
     object_id?: string;
+    scan_type?: string;
   }>();
   const { t } = useTranslation();
   const scheme = useColorScheme();
   const iconColor = scheme === 'dark' ? '#fafafa' : '#0a0a0a';
+
+  const isEquipmentPhoto = scan_type === 'equipment_photo';
 
   useEffect(() => {
     if (!modulepart || !object_id) {
@@ -37,7 +40,7 @@ export default function ScannerCaptureScreen() {
 
   const handleResult = (uri: string, width: number, height: number) => {
     router.replace(
-      `/scanner/review?uri=${encodeURIComponent(uri)}&width=${width}&height=${height}&modulepart=${modulepart}&object_id=${object_id}` as never,
+      `/scanner/review?uri=${encodeURIComponent(uri)}&width=${width}&height=${height}&modulepart=${modulepart}&object_id=${object_id}&scan_type=${scan_type ?? 'document'}` as never,
     );
   };
 
@@ -79,7 +82,7 @@ export default function ScannerCaptureScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark" edges={['top', 'bottom']}>
       <ScreenHeader
-        title={t('scanner.title')}
+        title={isEquipmentPhoto ? t('equipment.title') : t('scanner.title')}
         subtitle={`${modulepart ?? '—'} #${object_id ?? '—'}`}
         onBack={() => router.back()}
       />
@@ -92,10 +95,10 @@ export default function ScannerCaptureScreen() {
           <Camera size={48} color={scheme === 'dark' ? '#0a0a0a' : '#ffffff'} strokeWidth={1.75} />
         </Pressable>
         <Text className="mb-2 text-base font-medium text-text dark:text-text-dark">
-          {t('scanner.capture')}
+          {isEquipmentPhoto ? t('equipment.capture') : t('scanner.capture')}
         </Text>
         <Text className="mb-10 text-center text-sm text-text-muted dark:text-text-muted-dark">
-          {t('scanner.instruction')}
+          {isEquipmentPhoto ? t('equipment.instruction') : t('scanner.instruction')}
         </Text>
 
         <View className="w-full">

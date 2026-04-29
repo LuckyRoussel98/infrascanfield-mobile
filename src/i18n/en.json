@@ -73,6 +73,17 @@
     "paid": "Paid",
     "unpaid": "Unpaid"
   },
+  "equipment": {
+    "title": "Equipment photo",
+    "capture": "Capture",
+    "instruction": "Frame the equipment and take a geo-tagged photo.",
+    "geo_idle": "Location not started",
+    "geo_fetching": "Acquiring position…",
+    "geo_denied": "Location permission denied — photo will be sent without coordinates.",
+    "geo_unavailable": "Location unavailable — photo will be sent without coordinates.",
+    "tab_equipment": "Field photos",
+    "empty": "No equipment photos"
+  },
   "detail": {
     "tab_details": "Details",
     "tab_documents": "Documents",

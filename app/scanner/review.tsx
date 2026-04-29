@@ -19,12 +19,13 @@ import { logger } from '@/utils/logger';
  * Phase 2 will add proper crop handles and B&W filter.
  */
 export default function ScannerReviewScreen() {
-  const { uri, width, height, modulepart, object_id } = useLocalSearchParams<{
+  const { uri, width, height, modulepart, object_id, scan_type } = useLocalSearchParams<{
     uri?: string;
     width?: string;
     height?: string;
     modulepart?: string;
     object_id?: string;
+    scan_type?: string;
   }>();
   const { t } = useTranslation();
   const scheme = useColorScheme();
@@ -60,12 +61,14 @@ export default function ScannerReviewScreen() {
   };
 
   const onRetake = () => {
-    router.replace(`/scanner/capture?modulepart=${modulepart}&object_id=${object_id}` as never);
+    router.replace(
+      `/scanner/capture?modulepart=${modulepart}&object_id=${object_id}&scan_type=${scan_type ?? 'document'}` as never,
+    );
   };
 
   const onContinue = () => {
     router.push(
-      `/scanner/validate?uri=${encodeURIComponent(currentUri)}&width=${width ?? ''}&height=${height ?? ''}&modulepart=${modulepart}&object_id=${object_id}` as never,
+      `/scanner/validate?uri=${encodeURIComponent(currentUri)}&width=${width ?? ''}&height=${height ?? ''}&modulepart=${modulepart}&object_id=${object_id}&scan_type=${scan_type ?? 'document'}` as never,
     );
   };
 
