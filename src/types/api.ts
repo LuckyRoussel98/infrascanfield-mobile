@@ -212,6 +212,144 @@ export interface UploadResponse {
   file_url: string;
 }
 
+// ─── Object detail (unified) ──────────────────────────────────────────
+
+export interface FactureHeader {
+  id: number;
+  ref: string;
+  fk_soc: number;
+  soc_name: string;
+  note_public: string;
+  note_private: string;
+  status: number;
+  date: string | null;
+  date_lim_reglement: string | null;
+  total_ht: number;
+  total_tva: number;
+  total_ttc: number;
+  paid: 0 | 1;
+}
+
+export interface PropalHeader {
+  id: number;
+  ref: string;
+  fk_soc: number;
+  soc_name: string;
+  note_public: string;
+  note_private: string;
+  status: number;
+  date: string | null;
+  fin_validite: string | null;
+  total_ht: number;
+  total_tva: number;
+  total_ttc: number;
+}
+
+export interface FicheinterHeader {
+  id: number;
+  ref: string;
+  fk_soc: number;
+  soc_name: string;
+  note_public: string;
+  note_private: string;
+  status: number;
+  date_creation: string | null;
+  date_valid: string | null;
+  duration: number;
+  description: string;
+}
+
+export interface ProjetHeader {
+  id: number;
+  ref: string;
+  fk_soc: number;
+  soc_name: string;
+  note_public: string;
+  note_private: string;
+  status: number;
+  title: string;
+  date_start: string | null;
+  date_end: string | null;
+  opp_amount: number;
+  opp_status: number;
+  description: string;
+}
+
+export interface ContratHeader {
+  id: number;
+  ref: string;
+  fk_soc: number;
+  soc_name: string;
+  note_public: string;
+  note_private: string;
+  status: number;
+  ref_customer: string;
+  date: string | null;
+}
+
+export type ObjectHeader =
+  | ({ type: 'facture' } & FactureHeader)
+  | ({ type: 'propal' } & PropalHeader)
+  | ({ type: 'ficheinter' } & FicheinterHeader)
+  | ({ type: 'projet' } & ProjetHeader)
+  | ({ type: 'contrat' } & ContratHeader);
+
+export interface ObjectLine {
+  id: number;
+  fk_product: number;
+  product_ref: string;
+  product_label: string;
+  description: string;
+  qty: number;
+  subprice: number;
+  tva_tx: number;
+  remise_percent: number;
+  total_ht: number;
+  total_tva: number;
+  total_ttc: number;
+}
+
+export interface ObjectDocument {
+  name: string;
+  size: number;
+  modified: string;
+  mime: string;
+  file_path: string;
+  file_url: string;
+}
+
+export interface ObjectScanLog {
+  rowid: number;
+  fk_user: number;
+  filename: string;
+  filepath: string;
+  filesize: number;
+  mime_type: string;
+  scan_type: ScanType;
+  geo_lat: number | null;
+  geo_lng: number | null;
+  geo_accuracy: number | null;
+  scanned_at: string | null;
+  uploaded_at: string;
+  device_uuid: string | null;
+}
+
+export interface ObjectDetailResponse {
+  type: ModulePart;
+  id: number;
+  ref: string;
+  // Header shape depends on `type` — narrow with the discriminator before reading specifics.
+  header:
+    | FactureHeader
+    | PropalHeader
+    | FicheinterHeader
+    | ProjetHeader
+    | ContratHeader;
+  lines: ObjectLine[];
+  documents: ObjectDocument[];
+  scan_logs: ObjectScanLog[];
+}
+
 // ─── API errors ───────────────────────────────────────────────────────
 
 export interface ApiErrorBody {
