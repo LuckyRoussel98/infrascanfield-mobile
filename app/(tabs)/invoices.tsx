@@ -3,13 +3,14 @@ import { router } from 'expo-router';
 import { Receipt } from 'lucide-react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, FlatList, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getInvoicesAccessible } from '@/api/endpoints/invoices';
 import { EmptyState } from '@/components/EmptyState';
 import { ObjectCard } from '@/components/ObjectCard';
 import { SearchBar } from '@/components/SearchBar';
+import { ObjectCardSkeletonList } from '@/components/Skeleton';
 import { StatusFilter } from '@/components/StatusFilter';
 import type { InvoiceRow } from '@/types/api';
 import { formatCurrency, formatDate } from '@/utils/format';
@@ -73,9 +74,9 @@ export default function InvoicesScreen() {
       </View>
 
       {query.isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator />
-        </View>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+          <ObjectCardSkeletonList count={6} />
+        </ScrollView>
       ) : query.isError ? (
         <EmptyState icon={Receipt} title={t('common.error')} />
       ) : items.length === 0 ? (

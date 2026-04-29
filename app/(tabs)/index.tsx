@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getDashboard } from '@/api/endpoints/dashboard';
 import { ObjectCard } from '@/components/ObjectCard';
+import { ObjectCardSkeletonList } from '@/components/Skeleton';
 import { useAuthStore } from '@/stores/authStore';
 import type { InterventionRow, InvoiceRow, ProposalRow } from '@/types/api';
 import { formatCurrency, formatDate, formatDuration, formatRelativeDateTime } from '@/utils/format';
@@ -54,8 +55,11 @@ export default function DashboardScreen() {
         </View>
 
         {query.isLoading ? (
-          <View className="items-center py-12">
-            <ActivityIndicator />
+          <View>
+            <Text className="mb-2 text-base font-semibold text-text dark:text-text-dark">
+              {t('dashboard.interventions_today')}
+            </Text>
+            <ObjectCardSkeletonList count={3} />
           </View>
         ) : query.isError ? (
           <View className="rounded-2xl border border-danger/30 bg-danger/10 p-4">

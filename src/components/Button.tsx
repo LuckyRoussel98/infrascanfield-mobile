@@ -1,10 +1,20 @@
-import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  Text,
+  type GestureResponderEvent,
+  type PressableProps,
+} from 'react-native';
+
+import { haptic } from '@/utils/haptics';
 
 interface ButtonProps extends Omit<PressableProps, 'children'> {
   label: string;
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   loading?: boolean;
   fullWidth?: boolean;
+  /** Set to false to skip haptic on press (default: true). */
+  haptics?: boolean;
 }
 
 export function Button({
@@ -12,11 +22,21 @@ export function Button({
   variant = 'primary',
   loading = false,
   fullWidth = true,
+  haptics = true,
   disabled,
   className,
+  onPress,
   ...rest
 }: ButtonProps) {
   const isDisabled = disabled || loading;
+
+  const handlePress = (event: GestureResponderEvent) => {
+    if (haptics) {
+      if (variant === 'danger') haptic.warning();
+      else haptic.tap();
+    }
+    onPress?.(event);
+  };
 
   const base = 'min-h-touch-min items-center justify-center rounded-2xl px-6 py-4 active:opacity-70';
   const width = fullWidth ? 'w-full' : 'self-start';
@@ -40,6 +60,7 @@ export function Button({
   return (
     <Pressable
       disabled={isDisabled}
+      onPress={handlePress}
       className={`${base} ${width} ${variants[variant]} ${disabledClass} ${className ?? ''}`}
       {...rest}
     >

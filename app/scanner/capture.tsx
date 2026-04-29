@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { haptic } from '@/utils/haptics';
 import { logger } from '@/utils/logger';
 
 /**
@@ -45,8 +46,10 @@ export default function ScannerCaptureScreen() {
   };
 
   const onTakePhoto = async () => {
+    haptic.light();
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (perm.status !== 'granted') {
+      haptic.error();
       Alert.alert('Permission caméra refusée', "Autorisez l'accès à l'appareil photo dans les réglages système.");
       return;
     }
@@ -58,6 +61,7 @@ export default function ScannerCaptureScreen() {
       exif: false,
     });
     if (res.canceled || !res.assets?.[0]) return;
+    haptic.medium();
     const asset = res.assets[0];
     handleResult(asset.uri, asset.width, asset.height);
   };

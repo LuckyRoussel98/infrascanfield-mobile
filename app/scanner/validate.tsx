@@ -26,6 +26,7 @@ import { toast } from '@/stores/toastStore';
 import type { Geolocation, ModulePart, ScanType, UploadRequest } from '@/types/api';
 import { generateUuid } from '@/utils/format';
 import { getCurrentPosition } from '@/utils/geolocation';
+import { haptic } from '@/utils/haptics';
 import { logger } from '@/utils/logger';
 
 const MODULEPART_LABEL: Record<ModulePart, string> = {
@@ -144,6 +145,7 @@ export default function ScannerValidateScreen() {
         await refreshSyncCounts();
 
         setDone({ scan_log_id: res.scan_log_id, idempotent: res.idempotent });
+        haptic.success();
         toast.success(
           res.idempotent
             ? 'Déjà envoyé (dédup)'
@@ -168,6 +170,7 @@ export default function ScannerValidateScreen() {
         await refreshSyncCounts();
 
         if (transient) {
+          haptic.warning();
           toast.info('Hors-ligne — sera envoyé à la reconnexion');
           setDone({ scan_log_id: 0, idempotent: false });
           // Kick the worker so the moment connectivity comes back it tries again.
@@ -187,6 +190,7 @@ export default function ScannerValidateScreen() {
           msg = apiErr.message ?? t('common.error');
         }
         setErrorMsg(msg);
+        haptic.error();
         toast.error(msg, 4500);
       }
     } catch (e) {
