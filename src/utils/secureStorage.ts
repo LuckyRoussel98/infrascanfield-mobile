@@ -1,5 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { MMKV } from 'react-native-mmkv';
 
 import { logger } from './logger';
 
@@ -61,22 +61,34 @@ export const secureStorage = {
 };
 
 /**
- * MMKV instance (encrypted at rest with a derived key per app install).
- * Synchronous read/write. Used by Zustand persist middleware.
- */
-export const mmkv = new MMKV({ id: 'infrasscanfield' });
-
-/**
- * Adapter for Zustand's persist middleware (createJSONStorage expects async-style API).
+ * Adapter for Zustand's persist middleware, backed by AsyncStorage.
+ * Compatible with Expo Go (no native module beyond what's bundled).
+ *
+ * Note : we keep the symbol name `mmkvStorage` for backwards compat with
+ * existing imports in the stores. A future Phase 2 EAS dev build can swap
+ * the implementation back to react-native-mmkv for sync + better perf.
  */
 export const mmkvStorage = {
-  getItem: (name: string): string | null => {
-    return mmkv.getString(name) ?? null;
+  getItem: async (name: string): Promise<string | null> => {
+    try {
+      return await AsyncStorage.getItem(name);
+    } catch (e) {
+      logger.warn('AsyncStorage.getItem failed', e);
+      return null;
+    }
   },
-  setItem: (name: string, value: string): void => {
-    mmkv.set(name, value);
+  setItem: async (name: string, value: string): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(name, value);
+    } catch (e) {
+      logger.warn('AsyncStorage.setItem failed', e);
+    }
   },
-  removeItem: (name: string): void => {
-    mmkv.delete(name);
+  removeItem: async (name: string): Promise<void> => {
+    try {
+      await AsyncStorage.removeItem(name);
+    } catch (e) {
+      logger.warn('AsyncStorage.removeItem failed', e);
+    }
   },
 };
