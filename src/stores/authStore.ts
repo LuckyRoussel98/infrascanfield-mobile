@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { logout as logoutApi, refresh as refreshApi } from '@/api/endpoints/auth';
 import type {
   ClientSettings,
   LicenseInfo,
@@ -10,6 +9,10 @@ import type {
 } from '@/types/api';
 import { logger } from '@/utils/logger';
 import { mmkvStorage, secureStorage } from '@/utils/secureStorage';
+
+// IMPORTANT : do NOT statically import `@/api/endpoints/auth` here — it would
+// create a require cycle (auth -> client -> authStore -> auth). We use a
+// dynamic import inside the action callbacks so the cycle is broken.
 
 /**
  * Auth state held in memory and persisted across launches.
@@ -84,6 +87,8 @@ export const useAuthStore = create<AuthState>()(
       logout: async (options) => {
         if (options?.callServer !== false) {
           try {
+            // Dynamic import breaks the require cycle with @/api/endpoints/auth
+            const { logout: logoutApi } = await import('@/api/endpoints/auth');
             await logoutApi();
           } catch (e) {
             logger.warn('authStore.logout : server call failed (token may already be invalid)', e);
@@ -102,6 +107,7 @@ export const useAuthStore = create<AuthState>()(
 
       refresh: async () => {
         try {
+          const { refresh: refreshApi } = await import('@/api/endpoints/auth');
           const res = await refreshApi();
           await secureStorage.setToken(res.token, res.expires_at);
           set({ token: res.token, expiresAt: res.expires_at });
