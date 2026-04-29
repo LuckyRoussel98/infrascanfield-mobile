@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { logout as logoutApi, refresh as refreshApi } from '@/api/endpoints/auth';
 import type {
   ClientSettings,
   LicenseInfo,
@@ -40,8 +41,10 @@ export interface AuthState {
     settings: ClientSettings;
     license: LicenseInfo;
   }) => Promise<void>;
-  /** Clear everything (logout). */
-  logout: () => Promise<void>;
+  /** Clear everything (logout). Optionally calls /auth/logout server-side first. */
+  logout: (options?: { callServer?: boolean }) => Promise<void>;
+  /** Try to refresh the token via /auth/refresh. Returns true if refreshed, false otherwise. */
+  refresh: () => Promise<boolean>;
   /** True iff a token is loaded AND not past its known expiry. */
   isAuthenticated: () => boolean;
 }
@@ -78,7 +81,14 @@ export const useAuthStore = create<AuthState>()(
         set({ token, expiresAt, user, permissions, settings, license, hydrated: true });
       },
 
-      logout: async () => {
+      logout: async (options) => {
+        if (options?.callServer !== false) {
+          try {
+            await logoutApi();
+          } catch (e) {
+            logger.warn('authStore.logout : server call failed (token may already be invalid)', e);
+          }
+        }
         await secureStorage.clearToken();
         set({
           token: null,
@@ -88,6 +98,19 @@ export const useAuthStore = create<AuthState>()(
           settings: null,
           license: null,
         });
+      },
+
+      refresh: async () => {
+        try {
+          const res = await refreshApi();
+          await secureStorage.setToken(res.token, res.expires_at);
+          set({ token: res.token, expiresAt: res.expires_at });
+          logger.debug('authStore.refresh : token refreshed', { expires_at: res.expires_at });
+          return true;
+        } catch (e) {
+          logger.warn('authStore.refresh failed', e);
+          return false;
+        }
       },
 
       isAuthenticated: () => {

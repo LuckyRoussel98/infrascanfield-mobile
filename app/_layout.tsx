@@ -9,6 +9,7 @@ import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ToastHost } from '@/components/Toast';
 import { useAuthStore } from '@/stores/authStore';
 
 const queryClient = new QueryClient({
@@ -43,6 +44,7 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: scheme === 'dark' ? '#0a0a0a' : '#ffffff' },
             }}
           />
+          <ToastHost />
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

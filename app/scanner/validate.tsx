@@ -19,6 +19,7 @@ import type { ApiError } from '@/api/client';
 import { Button } from '@/components/Button';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TextField } from '@/components/TextField';
+import { toast } from '@/stores/toastStore';
 import type { ModulePart } from '@/types/api';
 import { generateUuid } from '@/utils/format';
 import { logger } from '@/utils/logger';
@@ -88,18 +89,22 @@ export default function ScannerValidateScreen() {
       });
 
       setDone({ scan_log_id: res.scan_log_id, idempotent: res.idempotent });
+      toast.success(res.idempotent ? 'Déjà envoyé (dédup)' : 'Document envoyé ✓');
     } catch (e) {
       const apiErr = e as Partial<ApiError>;
       logger.warn('upload failed', apiErr);
+      let msg: string;
       if (apiErr.status === 413) {
-        setErrorMsg('Fichier trop volumineux (taille max dépassée).');
+        msg = 'Fichier trop volumineux (taille max dépassée).';
       } else if (apiErr.status === 403) {
-        setErrorMsg("Vous n'avez pas la permission d'uploader sur cet objet.");
+        msg = "Vous n'avez pas la permission d'uploader sur cet objet.";
       } else if (apiErr.status === 404) {
-        setErrorMsg('Objet Dolibarr introuvable.');
+        msg = 'Objet Dolibarr introuvable.';
       } else {
-        setErrorMsg(apiErr.message ?? t('common.error'));
+        msg = apiErr.message ?? t('common.error');
       }
+      setErrorMsg(msg);
+      toast.error(msg, 4500);
     } finally {
       setUploading(false);
     }

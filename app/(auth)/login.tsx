@@ -18,7 +18,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useInstanceStore } from '@/stores/instanceStore';
 import type { ApiError } from '@/api/client';
 import { logger } from '@/utils/logger';
-import { generateUuid } from '@/utils/format';
+import { secureStorage } from '@/utils/secureStorage';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
@@ -38,9 +38,8 @@ export default function LoginScreen() {
     setSubmitting(true);
     setErrorMsg(null);
     try {
-      // device_uuid : a stable per-install identifier — for Phase 1 we just generate one
-      // on first login and persist it via secure storage in Phase 2 (see TODO in src/utils).
-      const deviceUuid = generateUuid();
+      // device_uuid : stable per-install identifier, persisted in secure-store at first boot.
+      const deviceUuid = await secureStorage.getDeviceUuid();
       const res = await loginApi({
         login: username.trim(),
         password,

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
+import { generateUuid } from './format';
 import { logger } from './logger';
 
 /**
@@ -16,6 +17,7 @@ import { logger } from './logger';
 const SECURE_KEYS = {
   X_IFS_TOKEN: 'x_ifs_token',
   X_IFS_TOKEN_EXPIRES_AT: 'x_ifs_token_expires_at',
+  DEVICE_UUID: 'device_uuid',
 } as const;
 
 export const secureStorage = {
@@ -56,6 +58,24 @@ export const secureStorage = {
       ]);
     } catch (e) {
       logger.warn('secureStorage.clearToken failed', e);
+    }
+  },
+
+  /**
+   * Get-or-create the device UUID. Persists in secure-store so it survives login/logout
+   * and app reinstalls (depending on Android backup policy). Stable per app install.
+   */
+  async getDeviceUuid(): Promise<string> {
+    try {
+      let uuid = await SecureStore.getItemAsync(SECURE_KEYS.DEVICE_UUID);
+      if (!uuid) {
+        uuid = generateUuid();
+        await SecureStore.setItemAsync(SECURE_KEYS.DEVICE_UUID, uuid);
+      }
+      return uuid;
+    } catch (e) {
+      logger.warn('secureStorage.getDeviceUuid failed, returning ephemeral', e);
+      return generateUuid();
     }
   },
 };
