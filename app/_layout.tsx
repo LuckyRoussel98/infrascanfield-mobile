@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ToastHost } from '@/components/Toast';
+import { startSyncWorker, stopSyncWorker } from '@/features/sync/worker';
 import { useAuthStore } from '@/stores/authStore';
 
 const queryClient = new QueryClient({
@@ -31,6 +32,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     void bootstrap();
+    startSyncWorker();
+    return () => stopSyncWorker();
   }, [bootstrap]);
 
   return (

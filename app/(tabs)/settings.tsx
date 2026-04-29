@@ -1,13 +1,14 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { LogOut } from 'lucide-react-native';
+import { ChevronRight, LogOut } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View, useColorScheme } from 'react-native';
+import { Pressable, ScrollView, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useAuthStore } from '@/stores/authStore';
 import { useInstanceStore } from '@/stores/instanceStore';
+import { useSyncStore } from '@/stores/syncStore';
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
@@ -32,6 +33,9 @@ export default function SettingsScreen() {
 
   const appVersion = (Constants.expoConfig?.version ?? '1.0.0') as string;
   const iconColor = scheme === 'dark' ? '#fafafa' : '#0a0a0a';
+  const syncCounts = useSyncStore((s) => s.counts);
+  const online = useSyncStore((s) => s.online);
+  const pendingCount = syncCounts.pending + syncCounts.sending + syncCounts.error;
 
   return (
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark" edges={['top']}>
@@ -49,6 +53,22 @@ export default function SettingsScreen() {
 
         <Section title="Instance">
           <KV label="URL" value={instanceUrl ?? '—'} />
+        </Section>
+
+        <Section title="Synchronisation">
+          <Pressable
+            onPress={() => router.push('/sync-queue' as never)}
+            className="flex-row items-center justify-between border-b border-border/40 px-4 py-3 last:border-b-0 dark:border-border-dark/40"
+          >
+            <View className="flex-1">
+              <Text className="text-sm text-text dark:text-text-dark">File de synchro</Text>
+              <Text className="mt-0.5 text-xs text-text-muted dark:text-text-muted-dark">
+                {online ? 'En ligne' : 'Hors-ligne'}
+                {pendingCount > 0 ? ` • ${pendingCount} en attente` : ' • file vide'}
+              </Text>
+            </View>
+            <ChevronRight size={18} color={iconColor} />
+          </Pressable>
         </Section>
 
         <Section title="Module">

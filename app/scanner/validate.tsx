@@ -20,8 +20,10 @@ import type { ApiError } from '@/api/client';
 import { Button } from '@/components/Button';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { TextField } from '@/components/TextField';
+import { enqueue } from '@/db/outbox';
+import { drainOutbox, refreshSyncCounts } from '@/features/sync/worker';
 import { toast } from '@/stores/toastStore';
-import type { Geolocation, ModulePart, ScanType } from '@/types/api';
+import type { Geolocation, ModulePart, ScanType, UploadRequest } from '@/types/api';
 import { generateUuid } from '@/utils/format';
 import { getCurrentPosition } from '@/utils/geolocation';
 import { logger } from '@/utils/logger';
@@ -114,7 +116,7 @@ export default function ScannerValidateScreen() {
       });
 
       const idempotency_key = generateUuid();
-      const res = await uploadDocument({
+      const payload: UploadRequest = {
         modulepart: modulepart as ModulePart,
         object_id: Number(object_id),
         filename: filename || defaultFilename(modulepart, object_id, scanType),
@@ -123,31 +125,73 @@ export default function ScannerValidateScreen() {
         geolocation: geo,
         scanned_at: new Date().toISOString(),
         idempotency_key,
+      };
+
+      // Enqueue locally first so the work survives a crash/network failure
+      // mid-flight. The server-side llx_infrasscanfield_scan_log uniqueness
+      // on idempotency_key dedups any retry that actually reached it.
+      await enqueue({
+        op_type: 'documents.upload',
+        idempotency_key,
+        payload,
       });
 
-      setDone({ scan_log_id: res.scan_log_id, idempotent: res.idempotent });
-      toast.success(
-        res.idempotent
-          ? 'Déjà envoyé (dédup)'
-          : isEquipmentPhoto
-            ? 'Photo équipement envoyée ✓'
-            : 'Document envoyé ✓',
-      );
-    } catch (e) {
-      const apiErr = e as Partial<ApiError>;
-      logger.warn('upload failed', apiErr);
-      let msg: string;
-      if (apiErr.status === 413) {
-        msg = 'Fichier trop volumineux (taille max dépassée).';
-      } else if (apiErr.status === 403) {
-        msg = "Vous n'avez pas la permission d'uploader sur cet objet.";
-      } else if (apiErr.status === 404) {
-        msg = 'Objet Dolibarr introuvable.';
-      } else {
-        msg = apiErr.message ?? t('common.error');
+      try {
+        const res = await uploadDocument(payload);
+        const { markSent, getByIdempotencyKey } = await import('@/db/outbox');
+        const row = await getByIdempotencyKey(idempotency_key);
+        if (row) await markSent(row.id);
+        await refreshSyncCounts();
+
+        setDone({ scan_log_id: res.scan_log_id, idempotent: res.idempotent });
+        toast.success(
+          res.idempotent
+            ? 'Déjà envoyé (dédup)'
+            : isEquipmentPhoto
+              ? 'Photo équipement envoyée ✓'
+              : 'Document envoyé ✓',
+        );
+      } catch (e) {
+        const apiErr = e as Partial<ApiError>;
+        // Network/timeout/5xx → keep in outbox, sync worker will retry.
+        // 4xx (auth, permission, validation) → mark error, surface to user.
+        const transient =
+          !apiErr.status ||
+          apiErr.status === 0 ||
+          apiErr.status >= 500 ||
+          apiErr.status === 408 ||
+          apiErr.status === 429;
+
+        const { markError, getByIdempotencyKey } = await import('@/db/outbox');
+        const row = await getByIdempotencyKey(idempotency_key);
+        if (row) await markError(row.id, apiErr.message ?? String(e), transient);
+        await refreshSyncCounts();
+
+        if (transient) {
+          toast.info('Hors-ligne — sera envoyé à la reconnexion');
+          setDone({ scan_log_id: 0, idempotent: false });
+          // Kick the worker so the moment connectivity comes back it tries again.
+          void drainOutbox();
+          return;
+        }
+
+        logger.warn('upload failed (non-retryable)', apiErr);
+        let msg: string;
+        if (apiErr.status === 413) {
+          msg = 'Fichier trop volumineux (taille max dépassée).';
+        } else if (apiErr.status === 403) {
+          msg = "Vous n'avez pas la permission d'uploader sur cet objet.";
+        } else if (apiErr.status === 404) {
+          msg = 'Objet Dolibarr introuvable.';
+        } else {
+          msg = apiErr.message ?? t('common.error');
+        }
+        setErrorMsg(msg);
+        toast.error(msg, 4500);
       }
-      setErrorMsg(msg);
-      toast.error(msg, 4500);
+    } catch (e) {
+      logger.error('onSend pre-upload error', e);
+      setErrorMsg((e as Error).message ?? t('common.error'));
     } finally {
       setUploading(false);
     }
