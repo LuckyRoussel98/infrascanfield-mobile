@@ -6,7 +6,7 @@ import axios, {
 } from 'axios';
 
 import { useAuthStore } from '@/stores/authStore';
-import { useInstanceStore } from '@/stores/instanceStore';
+import { getActiveBaseUrl } from '@/stores/instanceStore';
 import { logger } from '@/utils/logger';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -33,7 +33,7 @@ function buildClient(): AxiosInstance {
   });
 
   instance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-    const baseUrl = useInstanceStore.getState().baseUrl;
+    const baseUrl = getActiveBaseUrl();
     const token = useAuthStore.getState().token;
 
     // Prepend Dolibarr API root if the URL is relative (`/auth/login`, etc.)

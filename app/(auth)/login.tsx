@@ -22,10 +22,11 @@ import { secureStorage } from '@/utils/secureStorage';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
-  const baseUrl = useInstanceStore((s) => s.baseUrl);
+  const baseUrl = useInstanceStore((s) => s.getActive()?.baseUrl ?? null);
+  const lastUserLogin = useInstanceStore((s) => s.getActive()?.lastUserLogin ?? '');
   const setSession = useAuthStore((s) => s.setSession);
 
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(lastUserLogin);
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

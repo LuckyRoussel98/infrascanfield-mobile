@@ -14,27 +14,50 @@ import { logger } from './logger';
  *    (Dolibarr URL, last route, settings cache, etc.). Fast, no async.
  */
 
-const SECURE_KEYS = {
+// Legacy keys (single-instance, pre-Bloc-F). Kept for one-shot migration only.
+const LEGACY_KEYS = {
   X_IFS_TOKEN: 'x_ifs_token',
   X_IFS_TOKEN_EXPIRES_AT: 'x_ifs_token_expires_at',
+} as const;
+
+const SECURE_KEYS = {
   DEVICE_UUID: 'device_uuid',
 } as const;
 
+// SecureStore.setItemAsync rejects characters outside [A-Za-z0-9._-]. UUIDs include
+// hyphens which are fine, but be defensive: replace anything else with `_`.
+function sanitize(id: string): string {
+  return id.replace(/[^A-Za-z0-9._-]/g, '_');
+}
+
+function tokenKey(instanceId: string): string {
+  return `x_ifs_token__${sanitize(instanceId)}`;
+}
+
+function tokenExpiryKey(instanceId: string): string {
+  return `x_ifs_token_expires_at__${sanitize(instanceId)}`;
+}
+
 export const secureStorage = {
-  async getToken(): Promise<string | null> {
+  /**
+   * Read the token for a specific instance.
+   * If `instanceId` is omitted (legacy callers), falls back to the pre-Bloc-F key.
+   */
+  async getToken(instanceId?: string): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(SECURE_KEYS.X_IFS_TOKEN);
+      if (instanceId) return await SecureStore.getItemAsync(tokenKey(instanceId));
+      return await SecureStore.getItemAsync(LEGACY_KEYS.X_IFS_TOKEN);
     } catch (e) {
       logger.warn('secureStorage.getToken failed', e);
       return null;
     }
   },
 
-  async setToken(token: string, expiresAt?: string): Promise<void> {
+  async setToken(instanceId: string, token: string, expiresAt?: string): Promise<void> {
     try {
-      await SecureStore.setItemAsync(SECURE_KEYS.X_IFS_TOKEN, token);
+      await SecureStore.setItemAsync(tokenKey(instanceId), token);
       if (expiresAt) {
-        await SecureStore.setItemAsync(SECURE_KEYS.X_IFS_TOKEN_EXPIRES_AT, expiresAt);
+        await SecureStore.setItemAsync(tokenExpiryKey(instanceId), expiresAt);
       }
     } catch (e) {
       logger.error('secureStorage.setToken failed', e);
@@ -42,22 +65,47 @@ export const secureStorage = {
     }
   },
 
-  async getTokenExpiry(): Promise<string | null> {
+  async getTokenExpiry(instanceId?: string): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(SECURE_KEYS.X_IFS_TOKEN_EXPIRES_AT);
+      if (instanceId) return await SecureStore.getItemAsync(tokenExpiryKey(instanceId));
+      return await SecureStore.getItemAsync(LEGACY_KEYS.X_IFS_TOKEN_EXPIRES_AT);
     } catch {
       return null;
     }
   },
 
-  async clearToken(): Promise<void> {
+  async clearToken(instanceId: string): Promise<void> {
     try {
       await Promise.all([
-        SecureStore.deleteItemAsync(SECURE_KEYS.X_IFS_TOKEN),
-        SecureStore.deleteItemAsync(SECURE_KEYS.X_IFS_TOKEN_EXPIRES_AT),
+        SecureStore.deleteItemAsync(tokenKey(instanceId)),
+        SecureStore.deleteItemAsync(tokenExpiryKey(instanceId)),
       ]);
     } catch (e) {
       logger.warn('secureStorage.clearToken failed', e);
+    }
+  },
+
+  /**
+   * One-shot migration: if a legacy single-instance token exists in secure-store,
+   * move it under the given instanceId and delete the old keys. Returns true if
+   * migration happened. Safe to call repeatedly — no-ops once cleared.
+   */
+  async migrateLegacyToken(instanceId: string): Promise<boolean> {
+    try {
+      const legacyToken = await SecureStore.getItemAsync(LEGACY_KEYS.X_IFS_TOKEN);
+      if (!legacyToken) return false;
+      const legacyExpiry = await SecureStore.getItemAsync(LEGACY_KEYS.X_IFS_TOKEN_EXPIRES_AT);
+      await SecureStore.setItemAsync(tokenKey(instanceId), legacyToken);
+      if (legacyExpiry) await SecureStore.setItemAsync(tokenExpiryKey(instanceId), legacyExpiry);
+      await Promise.all([
+        SecureStore.deleteItemAsync(LEGACY_KEYS.X_IFS_TOKEN),
+        SecureStore.deleteItemAsync(LEGACY_KEYS.X_IFS_TOKEN_EXPIRES_AT),
+      ]);
+      logger.info('secureStorage: migrated legacy token to instance', { instanceId });
+      return true;
+    } catch (e) {
+      logger.warn('secureStorage.migrateLegacyToken failed', e);
+      return false;
     }
   },
 

@@ -14,7 +14,7 @@ import { useInstanceStore } from '@/stores/instanceStore';
 export default function Index() {
   const hydrated = useAuthStore((s) => s.hydrated);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
-  const baseUrl = useInstanceStore((s) => s.baseUrl);
+  const baseUrl = useInstanceStore((s) => s.getActive()?.baseUrl ?? null);
 
   if (!hydrated) {
     return (

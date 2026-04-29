@@ -1,14 +1,15 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { ChevronRight, LogOut } from 'lucide-react-native';
+import { Check, ChevronRight, LogOut, Plus, Server, Trash2 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View, useColorScheme } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useAuthStore } from '@/stores/authStore';
-import { useInstanceStore } from '@/stores/instanceStore';
+import { type Instance, useInstanceStore } from '@/stores/instanceStore';
 import { useSyncStore } from '@/stores/syncStore';
+import { secureStorage } from '@/utils/secureStorage';
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
@@ -17,18 +18,60 @@ export default function SettingsScreen() {
   const license = useAuthStore((s) => s.license);
   const settings = useAuthStore((s) => s.settings);
   const logout = useAuthStore((s) => s.logout);
-  const instanceUrl = useInstanceStore((s) => s.baseUrl);
-  const clearInstance = useInstanceStore((s) => s.clear);
+  const switchInstance = useAuthStore((s) => s.switchInstance);
+
+  const instances = useInstanceStore((s) => s.instances);
+  const activeId = useInstanceStore((s) => s.activeId);
+  const removeInstance = useInstanceStore((s) => s.removeInstance);
 
   const onLogout = async () => {
     await logout();
     router.replace('/(auth)/login');
   };
 
-  const onSwitchInstance = async () => {
-    await logout();
-    clearInstance();
-    router.replace('/(auth)/setup');
+  const onAddInstance = () => {
+    router.push('/(auth)/setup');
+  };
+
+  const onSwitchTo = async (inst: Instance) => {
+    if (inst.id === activeId) return;
+    const ok = await switchInstance(inst.id);
+    if (ok) {
+      router.replace('/(tabs)');
+    } else {
+      router.replace('/(auth)/login');
+    }
+  };
+
+  const onRemove = (inst: Instance) => {
+    const isActive = inst.id === activeId;
+    Alert.alert(
+      'Supprimer cette instance ?',
+      `${inst.label} (${inst.baseUrl})\nLe token associé sera effacé.${
+        isActive ? '\n\nVous serez déconnecté.' : ''
+      }`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            await secureStorage.clearToken(inst.id);
+            removeInstance(inst.id);
+            const newActive = useInstanceStore.getState().getActive();
+            if (isActive) {
+              if (newActive) {
+                const ok = await switchInstance(newActive.id);
+                router.replace(ok ? '/(tabs)' : '/(auth)/login');
+              } else {
+                await logout({ callServer: false });
+                router.replace('/(auth)/setup');
+              }
+            }
+          },
+        },
+      ],
+    );
   };
 
   const appVersion = (Constants.expoConfig?.version ?? '1.0.0') as string;
@@ -51,9 +94,40 @@ export default function SettingsScreen() {
           <KV label="Admin" value={user?.admin ? 'Oui' : 'Non'} />
         </Section>
 
-        <Section title="Instance">
-          <KV label="URL" value={instanceUrl ?? '—'} />
-        </Section>
+        <View className="mb-5">
+          <View className="mb-2 flex-row items-center justify-between">
+            <Text className="text-xs font-semibold uppercase tracking-wider text-text-muted dark:text-text-muted-dark">
+              Instances Dolibarr
+            </Text>
+            <Pressable
+              onPress={onAddInstance}
+              hitSlop={8}
+              className="flex-row items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 active:opacity-70 dark:border-border-dark dark:bg-surface-dark"
+            >
+              <Plus size={12} color={iconColor} />
+              <Text className="text-xs font-semibold text-text dark:text-text-dark">Ajouter</Text>
+            </Pressable>
+          </View>
+          <View className="rounded-2xl border border-border bg-surface dark:border-border-dark dark:bg-surface-dark">
+            {instances.length === 0 ? (
+              <View className="px-4 py-3">
+                <Text className="text-sm text-text-muted dark:text-text-muted-dark">
+                  Aucune instance configurée.
+                </Text>
+              </View>
+            ) : (
+              instances.map((inst) => (
+                <InstanceRow
+                  key={inst.id}
+                  inst={inst}
+                  active={inst.id === activeId}
+                  onSwitch={() => onSwitchTo(inst)}
+                  onRemove={() => onRemove(inst)}
+                />
+              ))
+            )}
+          </View>
+        </View>
 
         <Section title="Synchronisation">
           <Pressable
@@ -84,14 +158,7 @@ export default function SettingsScreen() {
         </Section>
 
         <View className="mt-4 gap-3">
-          <Button
-            label={t('settings.logout')}
-            variant="danger"
-            onPress={onLogout}
-            // Logout icon — tinted via NativeWind on the button label is enough for now.
-            // We pass a custom React node via children if needed in Phase 2.
-          />
-          <Button label="Changer d'instance" variant="secondary" onPress={onSwitchInstance} />
+          <Button label={t('settings.logout')} variant="danger" onPress={onLogout} />
         </View>
 
         <View className="mt-6 items-center opacity-60">
@@ -99,6 +166,52 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function InstanceRow({
+  inst,
+  active,
+  onSwitch,
+  onRemove,
+}: {
+  inst: Instance;
+  active: boolean;
+  onSwitch: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <View className="flex-row items-center border-b border-border/40 px-4 py-3 last:border-b-0 dark:border-border-dark/40">
+      <Pressable onPress={onSwitch} className="flex-1 flex-row items-center active:opacity-70">
+        <View
+          className={`mr-3 h-9 w-9 items-center justify-center rounded-xl ${
+            active ? 'bg-text dark:bg-text-dark' : 'bg-background dark:bg-background-dark'
+          }`}
+        >
+          {active ? (
+            <Check size={16} color="#ffffff" />
+          ) : (
+            <Server size={16} color="#6b7280" />
+          )}
+        </View>
+        <View className="flex-1 pr-2">
+          <Text numberOfLines={1} className="text-sm font-semibold text-text dark:text-text-dark">
+            {inst.label}
+          </Text>
+          <Text numberOfLines={1} className="text-xs text-text-muted dark:text-text-muted-dark">
+            {inst.baseUrl}
+          </Text>
+          {inst.lastUserLogin ? (
+            <Text className="mt-0.5 text-[10px] text-text-muted dark:text-text-muted-dark">
+              {inst.lastUserLogin}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+      <Pressable onPress={onRemove} hitSlop={8} className="ml-2 p-2 active:opacity-70">
+        <Trash2 size={16} color="#ef4444" />
+      </Pressable>
+    </View>
   );
 }
 

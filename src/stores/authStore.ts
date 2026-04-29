@@ -10,6 +10,8 @@ import type {
 import { logger } from '@/utils/logger';
 import { mmkvStorage, secureStorage } from '@/utils/secureStorage';
 
+import { useInstanceStore } from './instanceStore';
+
 // IMPORTANT : do NOT statically import `@/api/endpoints/auth` here — it would
 // create a require cycle (auth -> client -> authStore -> auth). We use a
 // dynamic import inside the action callbacks so the cycle is broken.
@@ -50,6 +52,12 @@ export interface AuthState {
   refresh: () => Promise<boolean>;
   /** True iff a token is loaded AND not past its known expiry. */
   isAuthenticated: () => boolean;
+  /**
+   * Switch to a different instance and rehydrate its token + persisted user data
+   * (if any). Returns true when a valid in-memory session was loaded for the new
+   * instance, false when the caller should redirect to /(auth)/login.
+   */
+  switchInstance: (instanceId: string) => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -65,14 +73,22 @@ export const useAuthStore = create<AuthState>()(
 
       bootstrap: async () => {
         try {
-          const token = await secureStorage.getToken();
-          const expiresAt = await secureStorage.getTokenExpiry();
-          if (token) {
-            set({ token, expiresAt, hydrated: true });
-            logger.debug('authStore.bootstrap : token rehydrated');
-          } else {
-            set({ hydrated: true });
+          // First, migrate any pre-Bloc-F single-instance token onto the
+          // currently active instance (if there is one).
+          const active = useInstanceStore.getState().getActive();
+          if (active) {
+            await secureStorage.migrateLegacyToken(active.id);
+            const token = await secureStorage.getToken(active.id);
+            const expiresAt = await secureStorage.getTokenExpiry(active.id);
+            if (token) {
+              set({ token, expiresAt, hydrated: true });
+              logger.debug('authStore.bootstrap : token rehydrated for active instance', {
+                instanceId: active.id,
+              });
+              return;
+            }
           }
+          set({ hydrated: true });
         } catch (e) {
           logger.warn('authStore.bootstrap failed', e);
           set({ hydrated: true });
@@ -80,7 +96,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setSession: async ({ token, expiresAt, user, permissions, settings, license }) => {
-        await secureStorage.setToken(token, expiresAt);
+        const active = useInstanceStore.getState().getActive();
+        if (!active) {
+          throw new Error('authStore.setSession: no active instance');
+        }
+        await secureStorage.setToken(active.id, token, expiresAt);
+        useInstanceStore.getState().updateInstance(active.id, { lastUserLogin: user.login });
         set({ token, expiresAt, user, permissions, settings, license, hydrated: true });
       },
 
@@ -94,7 +115,8 @@ export const useAuthStore = create<AuthState>()(
             logger.warn('authStore.logout : server call failed (token may already be invalid)', e);
           }
         }
-        await secureStorage.clearToken();
+        const active = useInstanceStore.getState().getActive();
+        if (active) await secureStorage.clearToken(active.id);
         set({
           token: null,
           expiresAt: null,
@@ -106,10 +128,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       refresh: async () => {
+        const active = useInstanceStore.getState().getActive();
+        if (!active) return false;
         try {
           const { refresh: refreshApi } = await import('@/api/endpoints/auth');
           const res = await refreshApi();
-          await secureStorage.setToken(res.token, res.expires_at);
+          await secureStorage.setToken(active.id, res.token, res.expires_at);
           set({ token: res.token, expiresAt: res.expires_at });
           logger.debug('authStore.refresh : token refreshed', { expires_at: res.expires_at });
           return true;
@@ -127,6 +151,46 @@ export const useAuthStore = create<AuthState>()(
           if (!Number.isNaN(ts) && ts <= Date.now()) return false;
         }
         return true;
+      },
+
+      switchInstance: async (instanceId) => {
+        useInstanceStore.getState().setActive(instanceId);
+        // Reset in-memory session — the rehydration below will populate
+        // token + expiresAt from the new instance's secure-store keys.
+        set({
+          token: null,
+          expiresAt: null,
+          user: null,
+          permissions: null,
+          settings: null,
+          license: null,
+        });
+        try {
+          const token = await secureStorage.getToken(instanceId);
+          const expiresAt = await secureStorage.getTokenExpiry(instanceId);
+          if (!token) return false;
+          set({ token, expiresAt });
+          // user/permissions/settings/license live in MMKV under the auth
+          // key — that's a single shared slot, so they may now be stale.
+          // Trigger a /auth/me refresh in the background to re-sync.
+          void (async () => {
+            try {
+              const { me } = await import('@/api/endpoints/auth');
+              const res = await me();
+              set({
+                user: res.user,
+                permissions: res.permissions,
+                settings: res.settings,
+              });
+            } catch (e) {
+              logger.warn('authStore.switchInstance: /auth/me failed', e);
+            }
+          })();
+          return true;
+        } catch (e) {
+          logger.warn('authStore.switchInstance failed', e);
+          return false;
+        }
       },
     }),
     {

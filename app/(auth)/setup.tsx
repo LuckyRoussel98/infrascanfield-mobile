@@ -19,8 +19,8 @@ const URL_RE = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
 
 export default function SetupScreen() {
   const { t } = useTranslation();
-  const setBaseUrl = useInstanceStore((s) => s.setBaseUrl);
-  const persistedUrl = useInstanceStore((s) => s.baseUrl);
+  const addInstance = useInstanceStore((s) => s.addInstance);
+  const persistedUrl = useInstanceStore((s) => s.getActive()?.baseUrl ?? null);
 
   const [url, setUrl] = useState(persistedUrl ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export default function SetupScreen() {
 
   const onContinue = () => {
     if (!validateUrl(url)) return;
-    setBaseUrl(url.trim());
+    addInstance({ baseUrl: url.trim() });
     router.replace('/(auth)/login');
   };
 
