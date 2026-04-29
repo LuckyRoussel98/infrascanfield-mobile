@@ -28,7 +28,10 @@ function detectDeviceLanguage(): 'fr' | 'en' {
 }
 
 void i18n.use(initReactI18next).init({
-  compatibilityJSON: 'v4',
+  // Hermes (Expo Go on Android) lacks full Intl.PluralRules ; use v3 plural format
+  // which works without the polyfill. Future EAS builds with full Intl support
+  // can switch back to 'v4' if needed.
+  compatibilityJSON: 'v3',
   resources: {
     fr: { translation: fr },
     en: { translation: en },
