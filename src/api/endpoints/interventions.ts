@@ -6,6 +6,7 @@ export interface InterventionsAssignedQuery {
   status?: string;
   from?: string;
   to?: string;
+  q?: string;
   page?: number;
   limit?: number;
 }
@@ -22,6 +23,7 @@ export async function getInterventionsAssigned(
       status: query.status,
       from: query.from,
       to: query.to,
+      q: query.q,
       page: query.page ?? 0,
       limit: query.limit ?? 20,
     },

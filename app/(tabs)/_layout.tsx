@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Briefcase, Cog, Home } from 'lucide-react-native';
+import { Briefcase, Cog, FileText, Home, Receipt } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useColorScheme } from 'react-native';
 
@@ -18,7 +18,7 @@ export default function TabsLayout() {
           backgroundColor: isDark ? '#0a0a0a' : '#ffffff',
           borderTopColor: isDark ? '#262626' : '#e5e5e5',
         },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' },
       }}
     >
       <Tabs.Screen
@@ -35,6 +35,20 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => (
             <Briefcase size={size} color={color} strokeWidth={1.75} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="proposals"
+        options={{
+          title: 'Devis',
+          tabBarIcon: ({ color, size }) => <FileText size={size} color={color} strokeWidth={1.75} />,
+        }}
+      />
+      <Tabs.Screen
+        name="invoices"
+        options={{
+          title: 'Factures',
+          tabBarIcon: ({ color, size }) => <Receipt size={size} color={color} strokeWidth={1.75} />,
         }}
       />
       <Tabs.Screen

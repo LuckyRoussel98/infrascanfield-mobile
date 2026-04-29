@@ -115,6 +115,42 @@ export interface ProposalRow {
   status: number;
 }
 
+export interface ProjectRow {
+  id: number;
+  ref: string;
+  title: string;
+  fk_soc: number;
+  soc_name: string;
+  date_start: string | null;
+  date_end: string | null;
+  opp_amount: number;
+  status: number;
+}
+
+export interface ContractRow {
+  id: number;
+  ref: string;
+  ref_customer: string;
+  fk_soc: number;
+  soc_name: string;
+  date: string;
+  status: number;
+}
+
+export interface ThirdpartyRow {
+  id: number;
+  name: string;
+  code_client: string;
+  code_supplier: string;
+  is_customer: 0 | 1;
+  is_supplier: 0 | 1;
+  email: string;
+  phone: string;
+  zip: string;
+  town: string;
+  country_code: string;
+}
+
 export interface SyncQueueStatus {
   pending: number;
   failed: number;
@@ -140,6 +176,10 @@ export interface Paginated<T> {
 
 export type InterventionsAssignedResponse = Paginated<InterventionRow>;
 export type InvoicesAccessibleResponse = Paginated<InvoiceRow>;
+export type ProposalsAccessibleResponse = Paginated<ProposalRow>;
+export type ProjectsAssignedResponse = Paginated<ProjectRow>;
+export type ContractsAccessibleResponse = Paginated<ContractRow>;
+export type ThirdpartiesSearchResponse = Paginated<ThirdpartyRow>;
 
 // ─── Documents upload ─────────────────────────────────────────────────
 

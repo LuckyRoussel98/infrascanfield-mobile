@@ -140,13 +140,33 @@ export default function DashboardScreen() {
               )}
             </Section>
 
-            <Text className="mt-2 text-xs text-text-muted dark:text-text-muted-dark">
+            <Text className="mt-2 mb-4 text-xs text-text-muted dark:text-text-muted-dark">
               {t('dashboard.recent_scans', { count: query.data.scan_recent_count })}
             </Text>
+
+            {/* Quick links to other entity types not in the tab bar */}
+            <Section title="Plus">
+              <View className="flex-row flex-wrap gap-2">
+                <QuickLink label="Projets" onPress={() => router.push('/list/projects' as never)} />
+                <QuickLink label="Contrats" onPress={() => router.push('/list/contracts' as never)} />
+                <QuickLink label="Rechercher un tiers" onPress={() => router.push('/search/thirdparties' as never)} />
+              </View>
+            </Section>
           </View>
         ) : null}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function QuickLink({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className="rounded-2xl border border-border bg-surface px-4 py-3 active:opacity-70 dark:border-border-dark dark:bg-surface-dark"
+    >
+      <Text className="text-sm font-medium text-text dark:text-text-dark">{label}</Text>
+    </Pressable>
   );
 }
 
