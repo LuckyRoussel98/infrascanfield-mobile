@@ -100,8 +100,18 @@ export const useAuthStore = create<AuthState>()(
         if (!active) {
           throw new Error('authStore.setSession: no active instance');
         }
+        // Defensive: when the server responds with an HTML error page (eg the
+        // module isn't installed on this Dolibarr instance), axios still
+        // resolves and `token` arrives as undefined. Bail out with a clear
+        // message instead of letting expo-secure-store throw the cryptic
+        // "value must be strings" error.
+        if (typeof token !== 'string' || token.length === 0) {
+          throw new Error(
+            'Réponse serveur invalide : pas de token. Le module InfraSScanField est-il bien installé et activé sur cette instance ?',
+          );
+        }
         await secureStorage.setToken(active.id, token, expiresAt);
-        useInstanceStore.getState().updateInstance(active.id, { lastUserLogin: user.login });
+        useInstanceStore.getState().updateInstance(active.id, { lastUserLogin: user?.login ?? '' });
         set({ token, expiresAt, user, permissions, settings, license, hydrated: true });
       },
 

@@ -54,6 +54,15 @@ export const secureStorage = {
   },
 
   async setToken(instanceId: string, token: string, expiresAt?: string): Promise<void> {
+    // Hard guard against non-string values reaching SecureStore — its native
+    // validator throws a cryptic "value must be strings" message that's
+    // useless for diagnosing where the bad value came from.
+    if (typeof token !== 'string' || token.length === 0) {
+      throw new Error(`secureStorage.setToken: token must be a non-empty string (got ${typeof token})`);
+    }
+    if (expiresAt !== undefined && typeof expiresAt !== 'string') {
+      throw new Error(`secureStorage.setToken: expiresAt must be a string when provided (got ${typeof expiresAt})`);
+    }
     try {
       await SecureStore.setItemAsync(tokenKey(instanceId), token);
       if (expiresAt) {
